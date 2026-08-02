@@ -120,9 +120,7 @@ class GeoService:
             "features": features,
         }
 
-    async def vector_tile(
-        self, collection_id: str, z: int, x: int, y: int
-    ) -> tuple[bytes, bool]:
+    async def vector_tile(self, collection_id: str, z: int, x: int, y: int) -> tuple[bytes, bool]:
         collection = self.catalog.get(collection_id)
         cache_key = (collection_id, z, x, y)
         cached = self._tile_cache.get(cache_key)

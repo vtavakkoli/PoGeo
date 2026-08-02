@@ -36,9 +36,7 @@ def test_collection_discovery_and_geojson(base_url: str) -> None:
         payload = response.json()
         assert payload["type"] == "FeatureCollection"
         assert payload["numberReturned"] >= 3
-        assert all(
-            item["properties"]["category"] == "museum" for item in payload["features"]
-        )
+        assert all(item["properties"]["category"] == "museum" for item in payload["features"])
 
 
 def test_nearest_spatial_query(base_url: str) -> None:

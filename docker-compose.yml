@@ -1,0 +1,86 @@
+name: pogeo
+
+services:
+  postgis:
+    image: postgis/postgis:16-3.5-alpine
+    environment:
+      POSTGRES_DB: pogeo
+      POSTGRES_USER: pogeo
+      POSTGRES_PASSWORD: pogeo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pogeo -d pogeo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  ollama-model:
+    image: curlimages/curl:8.14.1
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        echo "Requesting Ollama model: $${OLLAMA_MODEL}"
+        curl --fail --show-error --silent --max-time 3600 \
+          http://ollama:11434/api/pull \
+          -H 'content-type: application/json' \
+          -d "{\"name\":\"$${OLLAMA_MODEL}\",\"stream\":false}"
+    restart: "no"
+
+  pogeo:
+    build:
+      context: .
+      target: runtime
+    environment:
+      DATABASE_URL: postgres://pogeo:pogeo@postgis:5432/pogeo
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+      POGEO_BIND_ADDRESS: 0.0.0.0:8080
+      POGEO_MAX_FEATURES: 500
+      POGEO_REQUEST_TIMEOUT_SECONDS: 180
+      RUST_LOG: ${RUST_LOG:-pogeo=info,tower_http=info}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgis:
+        condition: service_healthy
+      ollama-model:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  postgis-data:
+  ollama-data:

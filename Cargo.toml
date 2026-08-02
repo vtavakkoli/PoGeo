@@ -1,0 +1,57 @@
+[package]
+name = "pogeo"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+authors = ["Vahid Tavakkoli"]
+description = "AI-native, MCP-ready geospatial API server for PostGIS"
+license = "Apache-2.0"
+repository = "https://github.com/vtavakkoli/AutoUpdate"
+keywords = ["postgis", "geospatial", "mcp", "ollama", "ogc"]
+categories = ["web-programming::http-server", "database"]
+publish = false
+
+[dependencies]
+axum = { version = "0.8.9", features = ["json", "macros"] }
+http = "1.3"
+reqwest = { version = "0.13.4", features = ["json"] }
+rmcp = { version = "3.1.0", features = [
+  "server",
+  "macros",
+  "schemars",
+  "transport-streamable-http-server",
+] }
+schemars = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sqlx = { version = "0.9.0", default-features = false, features = [
+  "runtime-tokio",
+  "postgres",
+  "json",
+] }
+thiserror = "2.0"
+tokio = { version = "1.47", features = ["macros", "rt-multi-thread", "signal", "net"] }
+tokio-util = "0.7"
+tower-http = { version = "0.7.0", features = [
+  "compression-gzip",
+  "cors",
+  "request-id",
+  "sensitive-headers",
+  "timeout",
+  "trace",
+] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1.17", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = true
+
+[lints.rust]
+unsafe_code = "forbid"
+

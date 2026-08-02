@@ -16,7 +16,7 @@ line-by-line replacement for GeoServer.
 The demonstration includes Vienna points of interest, a responsive Leaflet map, and an Ollama chat
 interface. The model can inspect collections and execute validated spatial tools, but it cannot run
 arbitrary SQL or access database credentials.
-
+![PoGeo Screenshot](PoGeo.png)
 ## Highlights
 
 - **FastAPI application** with OpenAPI, health/readiness checks, CORS, security headers, and metrics.

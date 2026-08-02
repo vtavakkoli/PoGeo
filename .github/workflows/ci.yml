@@ -23,6 +23,8 @@ jobs:
         run: ruff format --check src tests
       - name: Ruff lint
         run: ruff check src tests
+      - name: Import smoke test
+        run: python -c "from pogeo.main import app; assert app.title == 'PoGeo'"
       - name: Unit tests
         run: pytest -m "not integration"
 
@@ -30,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose --profile test config --quiet
       - name: Build and test the stack
         run: >-
           docker compose --profile test up --build

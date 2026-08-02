@@ -6,6 +6,7 @@ collections:
     table: places
     id_column: id
     geometry_column: geom
+    geography_column: geom_geog
     geometry_type: Point
     srid: 4326
     properties:

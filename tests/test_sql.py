@@ -15,6 +15,7 @@ def collection() -> CollectionDefinition:
             "table": "places",
             "id_column": "id",
             "geometry_column": "geom",
+            "geography_column": "geom_geog",
             "properties": ["name", "category", "district"],
             "max_limit": 500,
         }
@@ -44,7 +45,9 @@ def test_feature_query_rejects_non_allowlisted_filter(collection: CollectionDefi
         SQLBuilder.feature_query(collection, request)
 
 
-def test_nearest_query_uses_geography_distance(collection: CollectionDefinition) -> None:
+def test_nearest_query_uses_indexed_geography_and_knn(
+    collection: CollectionDefinition,
+) -> None:
     request = NearestQuery(
         collection_id="places",
         longitude=16.3731,
@@ -55,6 +58,15 @@ def test_nearest_query_uses_geography_distance(collection: CollectionDefinition)
 
     prepared = SQLBuilder.nearest_query(collection, request)
 
-    assert "ST_DWithin" in prepared.sql
-    assert "::geography" in prepared.sql
+    assert 'ST_DWithin(t."geom_geog"' in prepared.sql
+    assert 't."geom" <-> ST_Transform' in prepared.sql
+    assert "ST_Distance" in prepared.sql
     assert prepared.parameters == (16.3731, 48.2085, 2500.0, 5)
+
+
+def test_tile_query_preserves_spatial_index_use(collection: CollectionDefinition) -> None:
+    prepared = SQLBuilder.tile_query(collection, 12, 2234, 1422)
+
+    assert 't."geom" && bounds.source' in prepared.sql
+    assert 'ST_Intersects(t."geom", bounds.source)' in prepared.sql
+    assert 'ST_Intersects(ST_Transform(t."geom"' not in prepared.sql

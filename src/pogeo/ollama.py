@@ -29,6 +29,11 @@ class OllamaAgent:
         self._client = httpx.AsyncClient(
             base_url=runtime.settings.ollama_base_url.rstrip("/"),
             timeout=runtime.settings.ollama_timeout_seconds,
+            limits=httpx.Limits(
+                max_connections=32,
+                max_keepalive_connections=16,
+                keepalive_expiry=30,
+            ),
         )
 
     async def close(self) -> None:
@@ -60,9 +65,8 @@ class OllamaAgent:
 
         context = ""
         if request.map_context is not None:
-            context = (
-                "\nCurrent map context: "
-                + request.map_context.model_dump_json(exclude_none=True)
+            context = "\nCurrent map context: " + request.map_context.model_dump_json(
+                exclude_none=True
             )
         messages.append({"role": "user", "content": request.message + context})
 

@@ -63,9 +63,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                     "filters": {
                         "type": "object",
-                        "additionalProperties": {
-                            "type": ["string", "number", "boolean"]
-                        },
+                        "additionalProperties": {"type": ["string", "number", "boolean"]},
                     },
                     "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
                     "offset": {"type": "integer", "minimum": 0},

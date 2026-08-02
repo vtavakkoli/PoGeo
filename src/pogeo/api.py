@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request, Response, status
@@ -41,6 +42,11 @@ async def ready() -> dict[str, str]:
     except Exception as exc:
         raise HTTPException(status_code=503, detail="PostGIS is unavailable") from exc
     return {"status": "ready" if available else "not-ready"}
+
+
+@router.get("/api/performance", tags=["Operations"])
+async def performance() -> dict[str, Any]:
+    return get_runtime().geo.performance_stats()
 
 
 @router.get("/api/ai/status", tags=["AI"])
@@ -196,6 +202,7 @@ async def nearest(
     response_class=Response,
 )
 async def vector_tile(
+    request: Request,
     collection_id: str,
     z: Annotated[int, Path(ge=0, le=22)],
     x: Annotated[int, Path(ge=0)],
@@ -205,12 +212,22 @@ async def vector_tile(
     if x > max_coordinate or y > max_coordinate:
         raise HTTPException(status_code=422, detail="Tile coordinates are outside this zoom")
     try:
-        tile = await get_runtime().geo.vector_tile(collection_id, z, x, y)
+        tile, cache_hit = await get_runtime().geo.vector_tile(collection_id, z, x, y)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    etag = f'"{hashlib.blake2s(tile, digest_size=8).hexdigest()}"'
+    headers = {
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=60",
+        "ETag": etag,
+        "X-PoGeo-Cache": "HIT" if cache_hit else "MISS",
+    }
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+
     return Response(
         content=tile,
         media_type="application/vnd.mapbox-vector-tile",
-        headers={"Cache-Control": "public, max-age=300"},
+        headers=headers,
         status_code=status.HTTP_200_OK,
     )

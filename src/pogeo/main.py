@@ -10,6 +10,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, ORJSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
@@ -44,9 +45,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     catalog = Catalog.load(settings.catalog_path)
-    database = Database(settings.database_url)
+    database = Database(
+        settings.database_url,
+        min_size=settings.database_pool_min_size,
+        max_size=settings.database_pool_max_size,
+        statement_timeout_ms=settings.database_statement_timeout_ms,
+        connect_timeout_seconds=settings.database_connect_timeout_seconds,
+        max_queries_per_connection=settings.database_max_queries_per_connection,
+        max_idle_seconds=settings.database_max_idle_seconds,
+    )
     await database.connect()
-    geo = GeoService(database, catalog, settings.max_features)
+    geo = GeoService(
+        database,
+        catalog,
+        settings.max_features,
+        tile_cache_max_items=settings.tile_cache_max_items,
+        tile_cache_ttl_seconds=settings.tile_cache_ttl_seconds,
+    )
     runtime = Runtime(settings=settings, catalog=catalog, database=database, geo=geo)
     set_runtime(runtime)
     app.state.runtime = runtime
@@ -75,6 +90,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+app.add_middleware(GZipMiddleware, minimum_size=settings.gzip_minimum_size, compresslevel=5)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -86,8 +102,9 @@ app.add_middleware(
         "X-Request-ID",
         "Mcp-Session-Id",
         "Last-Event-ID",
+        "If-None-Match",
     ],
-    expose_headers=["Mcp-Session-Id", "X-Request-ID"],
+    expose_headers=["Mcp-Session-Id", "X-Request-ID", "ETag", "Server-Timing"],
 )
 
 
@@ -102,6 +119,7 @@ async def metrics_middleware(request: Request, call_next):  # type: ignore[no-un
     LATENCY.labels(request.method, route_path).observe(elapsed)
     REQUESTS.labels(request.method, route_path, str(response.status_code)).inc()
     response.headers["X-Request-ID"] = request_id
+    response.headers["Server-Timing"] = f"app;dur={elapsed * 1000:.2f}"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -137,7 +155,13 @@ async def index() -> FileResponse:
 
 def run() -> None:
     uvicorn.run(  # noqa: S104
-        "pogeo.main:app", host="0.0.0.0", port=8000, proxy_headers=True
+        "pogeo.main:app",
+        host="0.0.0.0",
+        port=8000,
+        proxy_headers=True,
+        loop="uvloop",
+        http="httptools",
+        access_log=False,
     )
 
 

@@ -37,6 +37,23 @@ LATENCY = Histogram(
 )
 
 
+def _resolve_web_path(configured_path: Path) -> Path:
+    if configured_path.is_absolute():
+        candidates = (configured_path,)
+    else:
+        candidates = (
+            Path.cwd() / configured_path,
+            Path(__file__).resolve().parents[2] / configured_path,
+        )
+
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate.resolve()
+
+    checked = ", ".join(str(candidate) for candidate in candidates)
+    raise RuntimeError(f"PoGeo web directory was not found; checked: {checked}")
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
@@ -141,10 +158,7 @@ async def metrics() -> Response:
 app.include_router(router)
 app.mount("/mcp", mcp.streamable_http_app(), name="mcp")
 
-web_path = settings.web_path
-if not web_path.is_absolute():
-    project_root = Path(__file__).resolve().parents[2]
-    web_path = project_root / web_path
+web_path = _resolve_web_path(settings.web_path)
 app.mount("/static", StaticFiles(directory=web_path), name="static")
 
 

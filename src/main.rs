@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use axum::{
     Router,
-    http::{HeaderName, header},
+    http::{HeaderName, StatusCode, header},
 };
 use config::Config;
 use mcp::PoGeoMcp;
@@ -78,9 +78,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             header::AUTHORIZATION,
         )))
         .layer(CompressionLayer::new())
-        .layer(TimeoutLayer::new(Duration::from_secs(
-            config.request_timeout_seconds,
-        )))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            Duration::from_secs(config.request_timeout_seconds),
+        ))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

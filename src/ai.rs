@@ -38,6 +38,7 @@ impl OllamaClient {
     ) -> Result<ChatResponse, AppError> {
         let conversation_id = request
             .conversation_id
+            .clone()
             .unwrap_or_else(|| Uuid::new_v4().to_string());
         let mut messages = vec![
             OllamaMessage::text("system", system_prompt(state.config.max_features)),

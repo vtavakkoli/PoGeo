@@ -8,5 +8,5 @@
   </defs>
   <path fill="url(#g)" d="M24 3C13.5 3 5 11.5 5 22c0 13.1 19 23 19 23s19-9.9 19-23C43 11.5 34.5 3 24 3Zm0 26.5a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"/>
   <circle cx="24" cy="22" r="3.2" fill="#081522"/>
-  <text x="55" y="32" fill="#eef7ff" font-family="Inter,system-ui,sans-serif" font-size="27" font-weight="750" letter-spacing="-.8">PoGeo</text>
+  <text x="55" y="32" fill="#5B755C" font-family="Inter,system-ui,sans-serif" font-size="27" font-weight="750" letter-spacing="-.8">PoGeo</text>
 </svg>

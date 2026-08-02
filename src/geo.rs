@@ -106,7 +106,11 @@ impl GeoService {
             .bind(has_bbox.then_some(values[1]))
             .bind(has_bbox.then_some(values[2]))
             .bind(has_bbox.then_some(values[3]))
-            .bind(args.query.as_deref().filter(|query| !query.trim().is_empty()))
+            .bind(
+                args.query
+                    .as_deref()
+                    .filter(|query| !query.trim().is_empty()),
+            )
             .bind(i64::from(limit))
             .fetch_one(&self.pool)
             .await?;
@@ -140,11 +144,7 @@ impl GeoService {
             })
     }
 
-    pub async fn nearby(
-        &self,
-        args: &NearbyArgs,
-        maximum_limit: u32,
-    ) -> Result<Value, AppError> {
+    pub async fn nearby(&self, args: &NearbyArgs, maximum_limit: u32) -> Result<Value, AppError> {
         let collection = allowed_collection(&args.collection)?;
         validate_coordinate(args.longitude, args.latitude)?;
         if !(1.0..=100_000.0).contains(&args.distance_meters) {
@@ -231,9 +231,10 @@ impl GeoService {
                 summary: format!("Listed {} published collections", COLLECTIONS.len()),
             }),
             "query_features" => {
-                let args: QueryFeaturesArgs = serde_json::from_value(arguments).map_err(|error| {
-                    AppError::BadRequest(format!("invalid query_features arguments: {error}"))
-                })?;
+                let args: QueryFeaturesArgs =
+                    serde_json::from_value(arguments).map_err(|error| {
+                        AppError::BadRequest(format!("invalid query_features arguments: {error}"))
+                    })?;
                 let content = self.query_features(&args, maximum_limit).await?;
                 let count = feature_count(&content);
                 Ok(ToolExecution {
@@ -326,8 +327,7 @@ fn validate_coordinate(longitude: f64, latitude: f64) -> Result<(), AppError> {
         || !(-90.0..=90.0).contains(&latitude)
     {
         return Err(AppError::BadRequest(
-            "longitude must be between -180 and 180 and latitude between -90 and 90"
-                .to_owned(),
+            "longitude must be between -180 and 180 and latitude between -90 and 90".to_owned(),
         ));
     }
     Ok(())

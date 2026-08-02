@@ -73,10 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest_service("/mcp", mcp_service)
         .with_state(state)
         .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
-        .layer(SetRequestIdLayer::new(
-            request_id_header,
-            MakeRequestUuid,
-        ))
+        .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))
         .layer(SetSensitiveRequestHeadersLayer::new(std::iter::once(
             header::AUTHORIZATION,
         )))

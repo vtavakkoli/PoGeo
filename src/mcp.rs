@@ -7,9 +7,7 @@ use rmcp::{
 };
 use serde_json::{Value, json};
 
-use crate::{
-    models::{AppState, CollectionStatsArgs, NearbyArgs, QueryFeaturesArgs},
-};
+use crate::models::{AppState, CollectionStatsArgs, NearbyArgs, QueryFeaturesArgs};
 
 #[derive(Clone)]
 pub struct PoGeoMcp {
@@ -31,7 +29,9 @@ impl PoGeoMcp {
         Ok(json_result(self.state.geo.catalog()))
     }
 
-    #[tool(description = "Query an approved PostGIS collection and return a GeoJSON FeatureCollection")]
+    #[tool(
+        description = "Query an approved PostGIS collection and return a GeoJSON FeatureCollection"
+    )]
     async fn query_features(
         &self,
         Parameters(args): Parameters<QueryFeaturesArgs>,
@@ -98,7 +98,10 @@ impl ServerHandler for PoGeoMcp {
         Ok(ListResourcesResult {
             resources: vec![
                 Resource::new("pogeo://catalog", "PoGeo collection catalog".to_owned()),
-                Resource::new("pogeo://conformance", "PoGeo conformance declaration".to_owned()),
+                Resource::new(
+                    "pogeo://conformance",
+                    "PoGeo conformance declaration".to_owned(),
+                ),
             ],
             ..Default::default()
         })
@@ -126,11 +129,10 @@ impl ServerHandler for PoGeoMcp {
             }
         };
 
-        Ok(ReadResourceResult::new(vec![ResourceContents::text(
-            value.to_string(),
-            request.uri,
-        )])
-        .into())
+        Ok(
+            ReadResourceResult::new(vec![ResourceContents::text(value.to_string(), request.uri)])
+                .into(),
+        )
     }
 }
 

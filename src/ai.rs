@@ -6,9 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     error::AppError,
-    models::{
-        AppState, ChatRequest, ChatResponse, ToolExecutionRecord,
-    },
+    models::{AppState, ChatRequest, ChatResponse, ToolExecutionRecord},
 };
 
 #[derive(Clone)]
@@ -69,7 +67,11 @@ impl OllamaClient {
                 });
             }
 
-            debug!(iteration, calls = calls.len(), "executing Ollama tool calls");
+            debug!(
+                iteration,
+                calls = calls.len(),
+                "executing Ollama tool calls"
+            );
             for call in calls {
                 let name = call.function.name;
                 let arguments = call.function.arguments;

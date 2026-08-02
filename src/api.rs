@@ -23,10 +23,7 @@ pub fn router() -> Router<AppState> {
         .route("/openapi.json", get(openapi))
         .route("/collections", get(collections))
         .route("/collections/{collection_id}", get(collection))
-        .route(
-            "/collections/{collection_id}/items",
-            get(collection_items),
-        )
+        .route("/collections/{collection_id}/items", get(collection_items))
         .route(
             "/collections/{collection_id}/items/{feature_id}",
             get(collection_item),
@@ -166,9 +163,7 @@ async fn chat(
     Json(request): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>, AppError> {
     if request.message.trim().is_empty() {
-        return Err(AppError::BadRequest(
-            "message must not be empty".to_owned(),
-        ));
+        return Err(AppError::BadRequest("message must not be empty".to_owned()));
     }
     Ok(Json(state.ollama.chat(&state, request).await?))
 }
@@ -208,4 +203,3 @@ async fn openapi() -> Json<Value> {
         }
     }))
 }
-

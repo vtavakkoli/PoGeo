@@ -74,6 +74,8 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
 "src/pogeo/api.py" = ["B008"]
+# SQL identifiers are catalog-validated and quoted; all external values are parameters.
+"src/pogeo/sql.py" = ["S608"]
 
 [tool.mypy]
 python_version = "3.12"

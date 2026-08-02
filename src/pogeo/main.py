@@ -168,9 +168,9 @@ async def index() -> FileResponse:
 
 
 def run() -> None:
-    uvicorn.run(  # noqa: S104
+    uvicorn.run(
         "pogeo.main:app",
-        host="0.0.0.0",
+        host="0.0.0.0",  # noqa: S104
         port=8000,
         proxy_headers=True,
         loop="uvloop",

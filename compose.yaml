@@ -33,8 +33,8 @@ services:
       POGEO_DATABASE_STATEMENT_TIMEOUT_MS: ${POGEO_DATABASE_STATEMENT_TIMEOUT_MS:-15000}
       POGEO_CATALOG_PATH: /app/config/collections.yaml
       POGEO_WEB_PATH: /app/web
-      POGEO_OLLAMA_BASE_URL: http://ollama:11434
-      POGEO_OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+      POGEO_OLLAMA_BASE_URL: http://host.docker.internal:11434
+      POGEO_OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e2b}
       POGEO_TILE_CACHE_MAX_ITEMS: ${POGEO_TILE_CACHE_MAX_ITEMS:-2048}
       POGEO_TILE_CACHE_TTL_SECONDS: ${POGEO_TILE_CACHE_TTL_SECONDS:-300}
       POGEO_GZIP_MINIMUM_SIZE: ${POGEO_GZIP_MINIMUM_SIZE:-1024}
@@ -52,31 +52,6 @@ services:
     init: true
     stop_grace_period: 15s
     restart: unless-stopped
-
-  ollama:
-    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
-    profiles: ["ai"]
-    volumes:
-      - ollama-data:/root/.ollama
-    ports:
-      - "11434:11434"
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-    restart: unless-stopped
-
-  ollama-pull:
-    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
-    profiles: ["ai"]
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    depends_on:
-      ollama:
-        condition: service_healthy
-    command: ["pull", "${OLLAMA_MODEL:-qwen3:4b}"]
-    restart: "no"
 
   test:
     build:

@@ -1,0 +1,92 @@
+name: pogeo
+
+services:
+  postgis:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: pogeo
+      POSTGRES_USER: pogeo
+      POSTGRES_PASSWORD: pogeo
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+      - ./docker/postgis/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pogeo -d pogeo"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+
+  pogeo:
+    build:
+      context: .
+      target: runtime
+    environment:
+      POGEO_DATABASE_URL: postgresql://pogeo:pogeo@postgis:5432/pogeo
+      POGEO_CATALOG_PATH: /app/config/collections.yaml
+      POGEO_WEB_PATH: /app/web
+      POGEO_OLLAMA_BASE_URL: http://ollama:11434
+      POGEO_OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+      POGEO_CORS_ORIGINS: http://localhost:8000
+    depends_on:
+      postgis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    profiles: ["ai"]
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  ollama-pull:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:latest}
+    profiles: ["ai"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    command: ["pull", "${OLLAMA_MODEL:-qwen3:4b}"]
+    restart: "no"
+
+  test:
+    build:
+      context: .
+      target: test
+    profiles: ["test"]
+    environment:
+      POGEO_TEST_BASE_URL: http://pogeo:8000
+    depends_on:
+      pogeo:
+        condition: service_healthy
+    user: "0:0"
+    volumes:
+      - ./reports:/reports
+    command:
+      - pytest
+      - --html=/reports/test-report.html
+      - --self-contained-html
+    restart: "no"
+
+volumes:
+  postgis-data:
+  ollama-data:

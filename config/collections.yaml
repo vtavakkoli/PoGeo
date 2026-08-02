@@ -1,0 +1,17 @@
+collections:
+  - id: places
+    title: Vienna Places
+    description: Demonstration points of interest in Vienna.
+    schema: pogeo
+    table: places
+    id_column: id
+    geometry_column: geom
+    geometry_type: Point
+    srid: 4326
+    properties:
+      - name
+      - category
+      - district
+      - description
+    default_limit: 100
+    max_limit: 1000

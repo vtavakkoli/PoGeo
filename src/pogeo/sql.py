@@ -85,10 +85,16 @@ class SQLBuilder:
         selected = ",\n                ".join(
             f"t.{quote_identifier(column)}" for column in collection.selectable_columns
         )
-        point = "ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography"
-        geometry = (
-            f"ST_Transform(t.{quote_identifier(collection.geometry_column)}, 4326)::geography"
-        )
+        geometry = f"t.{quote_identifier(collection.geometry_column)}"
+        point_4326 = "ST_SetSRID(ST_MakePoint($1, $2), 4326)"
+        point_source = f"ST_Transform({point_4326}, {collection.srid})"
+        if collection.geography_column is not None:
+            geography = f"t.{quote_identifier(collection.geography_column)}"
+        elif collection.srid == 4326:
+            geography = f"{geometry}::geography"
+        else:
+            geography = f"ST_Transform({geometry}, 4326)::geography"
+
         conditions = ["TRUE"]
         parameters: list[Any] = [request.longitude, request.latitude]
 
@@ -100,20 +106,19 @@ class SQLBuilder:
 
         if request.radius_meters is not None:
             parameters.append(request.radius_meters)
-            conditions.append(f"ST_DWithin({geometry}, {point}, ${len(parameters)})")
+            conditions.append(
+                f"ST_DWithin({geography}, {point_4326}::geography, ${len(parameters)})"
+            )
 
         parameters.append(min(request.limit, 100))
         sql = f"""
             SELECT
                 {selected},
-                ST_AsGeoJSON(
-                    ST_Transform(t.{quote_identifier(collection.geometry_column)}, 4326),
-                    6
-                )::jsonb AS geometry,
-                ST_Distance({geometry}, {point}) AS distance_meters
+                ST_AsGeoJSON(ST_Transform({geometry}, 4326), 6)::jsonb AS geometry,
+                ST_Distance({geography}, {point_4326}::geography) AS distance_meters
             FROM {collection.qualified_table} AS t
-            WHERE {' AND '.join(conditions)}
-            ORDER BY distance_meters
+            WHERE {" AND ".join(conditions)}
+            ORDER BY {geometry} <-> {point_source}, distance_meters
             LIMIT ${len(parameters)}
         """.strip()
         return PreparedQuery(sql=sql, parameters=tuple(parameters))
@@ -123,23 +128,26 @@ class SQLBuilder:
         properties = ", ".join(
             f"t.{quote_identifier(column)}" for column in collection.selectable_columns
         )
-        geometry_column = quote_identifier(collection.geometry_column)
+        geometry_column = f"t.{quote_identifier(collection.geometry_column)}"
         sql = f"""
             WITH bounds AS (
-                SELECT ST_TileEnvelope($1, $2, $3) AS geom
+                SELECT
+                    ST_TileEnvelope($1, $2, $3) AS web_mercator,
+                    ST_Transform(ST_TileEnvelope($1, $2, $3), {collection.srid}) AS source
             ), tile_data AS (
                 SELECT
                     {properties},
                     ST_AsMVTGeom(
-                        ST_Transform(t.{geometry_column}, 3857),
-                        bounds.geom,
+                        ST_Transform({geometry_column}, 3857),
+                        bounds.web_mercator,
                         4096,
                         64,
                         TRUE
                     ) AS geom
                 FROM {collection.qualified_table} AS t
                 CROSS JOIN bounds
-                WHERE ST_Intersects(ST_Transform(t.{geometry_column}, 3857), bounds.geom)
+                WHERE {geometry_column} && bounds.source
+                  AND ST_Intersects({geometry_column}, bounds.source)
                 LIMIT 10000
             )
             SELECT ST_AsMVT(tile_data, $4, 4096, 'geom') FROM tile_data

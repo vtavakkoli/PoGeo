@@ -8,10 +8,16 @@ CREATE TABLE IF NOT EXISTS pogeo.places (
     category TEXT NOT NULL,
     district INTEGER NOT NULL CHECK (district BETWEEN 1 AND 23),
     description TEXT NOT NULL,
-    geom geometry(Point, 4326) NOT NULL
+    geom geometry(Point, 4326) NOT NULL,
+    geom_geog geography(Point, 4326) GENERATED ALWAYS AS (geom::geography) STORED
 );
 
+ALTER TABLE pogeo.places
+    ADD COLUMN IF NOT EXISTS geom_geog geography(Point, 4326)
+    GENERATED ALWAYS AS (geom::geography) STORED;
+
 CREATE INDEX IF NOT EXISTS places_geom_gix ON pogeo.places USING GIST (geom);
+CREATE INDEX IF NOT EXISTS places_geom_geog_gix ON pogeo.places USING GIST (geom_geog);
 CREATE INDEX IF NOT EXISTS places_category_idx ON pogeo.places (category);
 CREATE INDEX IF NOT EXISTS places_district_idx ON pogeo.places (district);
 
@@ -37,5 +43,7 @@ ON CONFLICT (name) DO UPDATE SET
     district = EXCLUDED.district,
     description = EXCLUDED.description,
     geom = EXCLUDED.geom;
+
+ANALYZE pogeo.places;
 
 COMMENT ON TABLE pogeo.places IS 'PoGeo demonstration points of interest in Vienna.';

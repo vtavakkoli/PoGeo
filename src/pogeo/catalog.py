@@ -27,6 +27,7 @@ class CollectionDefinition(BaseModel):
     table: str
     id_column: str = "id"
     geometry_column: str = "geom"
+    geography_column: str | None = None
     geometry_type: str = "Geometry"
     srid: int = 4326
     properties: list[str] = Field(default_factory=list)
@@ -39,6 +40,11 @@ class CollectionDefinition(BaseModel):
     @classmethod
     def identifiers_are_safe(cls, value: str) -> str:
         return validate_identifier(value)
+
+    @field_validator("geography_column")
+    @classmethod
+    def optional_identifier_is_safe(cls, value: str | None) -> str | None:
+        return validate_identifier(value) if value is not None else None
 
     @field_validator("properties")
     @classmethod
@@ -71,6 +77,9 @@ class Catalog:
         self._collections = {collection.id: collection for collection in collections}
         if len(self._collections) != len(collections):
             raise ValueError("Collection IDs must be unique")
+        self._ordered_collections = tuple(
+            sorted(self._collections.values(), key=lambda item: item.id)
+        )
 
     @classmethod
     def load(cls, path: Path) -> Catalog:
@@ -78,8 +87,8 @@ class Catalog:
         parsed = CatalogFile.model_validate(payload)
         return cls(parsed.collections)
 
-    def list(self) -> list[CollectionDefinition]:
-        return sorted(self._collections.values(), key=lambda item: item.id)
+    def list(self) -> tuple[CollectionDefinition, ...]:
+        return self._ordered_collections
 
     def get(self, collection_id: str) -> CollectionDefinition:
         try:

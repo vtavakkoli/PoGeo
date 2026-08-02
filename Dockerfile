@@ -13,8 +13,10 @@ RUN addgroup --system --gid 10001 pogeo \
 
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
-RUN python -m pip install --upgrade pip \
-    && python -m pip install .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --upgrade pip \
+    && python -m pip install . \
+    && python -m compileall -q /usr/local/lib/python3.12/site-packages/pogeo
 
 COPY config ./config
 COPY web ./web
@@ -22,14 +24,14 @@ COPY web ./web
 USER 10001:10001
 EXPOSE 8000
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
+HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --start-interval=2s --retries=8 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2)"
 
-CMD ["uvicorn", "pogeo.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+CMD ["uvicorn", "pogeo.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--loop", "uvloop", "--http", "httptools", "--no-access-log", "--timeout-keep-alive", "5", "--limit-concurrency", "1000", "--backlog", "2048"]
 
 FROM runtime AS test
 USER root
-RUN python -m pip install ".[dev]"
+RUN --mount=type=cache,target=/root/.cache/pip python -m pip install ".[dev]"
 COPY tests ./tests
 COPY scripts ./scripts
 RUN mkdir -p /reports && chown -R 10001:10001 /reports

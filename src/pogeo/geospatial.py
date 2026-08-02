@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from pogeo.cache import TTLCache
 from pogeo.catalog import Catalog, CollectionDefinition
 from pogeo.database import Database
 from pogeo.models import FeatureQuery, NearestQuery
@@ -35,13 +36,23 @@ def _row_to_feature(
 
 
 class GeoService:
-    def __init__(self, database: Database, catalog: Catalog, max_features: int) -> None:
+    def __init__(
+        self,
+        database: Database,
+        catalog: Catalog,
+        max_features: int,
+        *,
+        tile_cache_max_items: int = 2048,
+        tile_cache_ttl_seconds: float = 300.0,
+    ) -> None:
         self.database = database
         self.catalog = catalog
         self.max_features = max_features
-
-    def list_collections(self) -> list[dict[str, Any]]:
-        return [
+        self._tile_cache: TTLCache[tuple[str, int, int, int], bytes] = TTLCache(
+            max_items=tile_cache_max_items,
+            ttl_seconds=tile_cache_ttl_seconds,
+        )
+        self._collection_documents = tuple(
             {
                 "id": item.id,
                 "title": item.title,
@@ -49,26 +60,34 @@ class GeoService:
                 "itemType": "feature",
                 "crs": [f"http://www.opengis.net/def/crs/EPSG/0/{item.srid}"],
                 "geometryType": item.geometry_type,
-                "properties": item.properties,
+                "properties": list(item.properties),
             }
             for item in self.catalog.list()
-        ]
+        )
+        self._collection_descriptions = {
+            item.id: {
+                "id": item.id,
+                "title": item.title,
+                "description": item.description,
+                "schema": item.schema_name,
+                "table": item.table,
+                "idColumn": item.id_column,
+                "geometryColumn": item.geometry_column,
+                "geographyColumn": item.geography_column,
+                "geometryType": item.geometry_type,
+                "srid": item.srid,
+                "properties": list(item.properties),
+                "maxLimit": item.max_limit,
+            }
+            for item in self.catalog.list()
+        }
+
+    def list_collections(self) -> list[dict[str, Any]]:
+        return [dict(item) for item in self._collection_documents]
 
     def describe_collection(self, collection_id: str) -> dict[str, Any]:
-        item = self.catalog.get(collection_id)
-        return {
-            "id": item.id,
-            "title": item.title,
-            "description": item.description,
-            "schema": item.schema_name,
-            "table": item.table,
-            "idColumn": item.id_column,
-            "geometryColumn": item.geometry_column,
-            "geometryType": item.geometry_type,
-            "srid": item.srid,
-            "properties": item.properties,
-            "maxLimit": item.max_limit,
-        }
+        self.catalog.get(collection_id)
+        return dict(self._collection_descriptions[collection_id])
 
     async def query_features(self, request: FeatureQuery) -> dict[str, Any]:
         collection = self.catalog.get(request.collection_id)
@@ -94,17 +113,36 @@ class GeoService:
         collection = self.catalog.get(request.collection_id)
         prepared = SQLBuilder.nearest_query(collection, request)
         rows = await self.database.fetch(prepared.sql, *prepared.parameters)
-        features = [
-            _row_to_feature(row, collection, include_distance=True) for row in rows
-        ]
+        features = [_row_to_feature(row, collection, include_distance=True) for row in rows]
         return {
             "type": "FeatureCollection",
             "numberReturned": len(features),
             "features": features,
         }
 
-    async def vector_tile(self, collection_id: str, z: int, x: int, y: int) -> bytes:
+    async def vector_tile(self, collection_id: str, z: int, x: int, y: int) -> tuple[bytes, bool]:
         collection = self.catalog.get(collection_id)
+        cache_key = (collection_id, z, x, y)
+        cached = self._tile_cache.get(cache_key)
+        if cached is not None:
+            return cached, True
+
         prepared = SQLBuilder.tile_query(collection, z, x, y)
         value = await self.database.fetchval(prepared.sql, *prepared.parameters)
-        return bytes(value or b"")
+        tile = bytes(value or b"")
+        self._tile_cache.set(cache_key, tile)
+        return tile, False
+
+    def performance_stats(self) -> dict[str, Any]:
+        stats = self._tile_cache.stats
+        total = stats.hits + stats.misses
+        return {
+            "tileCache": {
+                "hits": stats.hits,
+                "misses": stats.misses,
+                "hitRate": round(stats.hits / total, 4) if total else 0.0,
+                "size": stats.size,
+                "maxItems": stats.max_items,
+                "ttlSeconds": stats.ttl_seconds,
+            }
+        }

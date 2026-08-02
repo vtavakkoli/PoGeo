@@ -17,8 +17,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 10s
     security_opt:
       - no-new-privileges:true
+    init: true
 
   pogeo:
     build:
@@ -26,10 +28,16 @@ services:
       target: runtime
     environment:
       POGEO_DATABASE_URL: postgresql://pogeo:pogeo@postgis:5432/pogeo
+      POGEO_DATABASE_POOL_MIN_SIZE: ${POGEO_DATABASE_POOL_MIN_SIZE:-2}
+      POGEO_DATABASE_POOL_MAX_SIZE: ${POGEO_DATABASE_POOL_MAX_SIZE:-20}
+      POGEO_DATABASE_STATEMENT_TIMEOUT_MS: ${POGEO_DATABASE_STATEMENT_TIMEOUT_MS:-15000}
       POGEO_CATALOG_PATH: /app/config/collections.yaml
       POGEO_WEB_PATH: /app/web
       POGEO_OLLAMA_BASE_URL: http://ollama:11434
       POGEO_OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b}
+      POGEO_TILE_CACHE_MAX_ITEMS: ${POGEO_TILE_CACHE_MAX_ITEMS:-2048}
+      POGEO_TILE_CACHE_TTL_SECONDS: ${POGEO_TILE_CACHE_TTL_SECONDS:-300}
+      POGEO_GZIP_MINIMUM_SIZE: ${POGEO_GZIP_MINIMUM_SIZE:-1024}
       POGEO_CORS_ORIGINS: http://localhost:8000
     depends_on:
       postgis:
@@ -41,6 +49,8 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+    init: true
+    stop_grace_period: 15s
     restart: unless-stopped
 
   ollama:

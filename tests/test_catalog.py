@@ -11,6 +11,7 @@ def test_catalog_loads_default_configuration() -> None:
 
     assert collection.title == "Vienna Places"
     assert collection.qualified_table == '"pogeo"."places"'
+    assert collection.geography_column == "geom_geog"
     assert "category" in collection.properties
 
 

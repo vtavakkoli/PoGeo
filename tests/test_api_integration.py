@@ -57,10 +57,22 @@ def test_nearest_spatial_query(base_url: str) -> None:
         assert distances == sorted(distances)
 
 
-def test_vector_tile_endpoint(base_url: str) -> None:
+def test_vector_tile_cache_and_conditional_get(base_url: str) -> None:
+    path = "/collections/places/tiles/12/2234/1422.pbf"
     with httpx.Client(base_url=base_url, timeout=20) as client:
-        response = client.get("/collections/places/tiles/12/2234/1422.pbf")
-        assert response.status_code == 200
-        assert response.headers["content-type"].startswith(
-            "application/vnd.mapbox-vector-tile"
-        )
+        first = client.get(path)
+        assert first.status_code == 200
+        assert first.headers["content-type"].startswith("application/vnd.mapbox-vector-tile")
+        assert first.headers["x-pogeo-cache"] == "MISS"
+        etag = first.headers["etag"]
+
+        second = client.get(path)
+        assert second.status_code == 200
+        assert second.headers["x-pogeo-cache"] == "HIT"
+
+        not_modified = client.get(path, headers={"If-None-Match": etag})
+        assert not_modified.status_code == 304
+
+        stats = client.get("/api/performance").json()["tileCache"]
+        assert stats["hits"] >= 2
+        assert stats["misses"] >= 1

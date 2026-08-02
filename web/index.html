@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="PoGeo AI-native PostGIS server demo">
+  <title>PoGeo · Ask your PostGIS data</title>
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="PoGeo home">
+      <img src="/static/logo.svg" alt="PoGeo">
+    </a>
+    <div class="topbar-actions">
+      <a href="/docs" target="_blank" rel="noreferrer">OpenAPI</a>
+      <a href="/collections" target="_blank" rel="noreferrer">Collections</a>
+      <a href="/mcp" target="_blank" rel="noreferrer">MCP</a>
+      <span id="ai-status" class="status status-waiting">Checking Ollama…</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="map-panel" aria-label="Interactive map">
+      <div id="map"></div>
+      <div class="map-toolbar">
+        <button id="show-all" type="button">Show all places</button>
+        <span id="feature-count">Loading demonstration data…</span>
+      </div>
+    </section>
+
+    <aside class="assistant-panel">
+      <div class="assistant-heading">
+        <div>
+          <span class="eyebrow">LOCAL GEOSPATIAL AI</span>
+          <h1>Ask your map</h1>
+        </div>
+        <span class="model-badge" id="model-name">Ollama</span>
+      </div>
+
+      <p class="intro">
+        PoGeo lets Ollama call validated PostGIS tools. The model never receives database
+        credentials and cannot execute arbitrary SQL.
+      </p>
+
+      <div class="examples" aria-label="Example questions">
+        <button class="prompt-chip" type="button">Show museums in district 1</button>
+        <button class="prompt-chip" type="button">Find the 5 nearest places to St. Stephen's Cathedral</button>
+        <button class="prompt-chip" type="button">Which family attractions are available?</button>
+      </div>
+
+      <div id="conversation" class="conversation" aria-live="polite">
+        <article class="message assistant-message">
+          <div class="avatar">P</div>
+          <div>
+            <strong>PoGeo</strong>
+            <p>Ask a question about the published Vienna places collection.</p>
+          </div>
+        </article>
+      </div>
+
+      <form id="chat-form" class="composer">
+        <label class="sr-only" for="question">Ask a geospatial question</label>
+        <textarea id="question" rows="2" maxlength="4000" placeholder="e.g. Show parks near the Danube Tower" required></textarea>
+        <button id="send" type="submit" aria-label="Send question">
+          <span>Ask PoGeo</span>
+          <span aria-hidden="true">→</span>
+        </button>
+      </form>
+
+      <details class="tool-details">
+        <summary>Latest validated tool calls</summary>
+        <pre id="tool-output">No tools called yet.</pre>
+      </details>
+    </aside>
+  </main>
+
+  <footer>
+    <span>FastAPI · PostGIS · MCP · Ollama</span>
+    <span>Read-only demonstration configuration</span>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

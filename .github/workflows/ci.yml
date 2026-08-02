@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Ruff format
+        run: ruff format --check src tests
+      - name: Ruff lint
+        run: ruff check src tests
+      - name: Unit tests
+        run: pytest -m "not integration"
+
+  compose-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test the stack
+        run: >-
+          docker compose --profile test up --build
+          --abort-on-container-exit --exit-code-from test test
+      - name: Compose logs
+        if: failure()
+        run: docker compose --profile test logs --no-color
+      - name: Upload HTML test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pogeo-test-report
+          path: reports/test-report.html
+          if-no-files-found: warn

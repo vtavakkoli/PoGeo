@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pogeo"
+version = "0.1.0"
+description = "AI-native, MCP-ready geospatial API server for PostGIS"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "Vahid Tavakkoli" }
+]
+keywords = ["postgis", "fastapi", "mcp", "ollama", "geospatial", "ogc"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Framework :: FastAPI",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: GIS",
+]
+dependencies = [
+  "asyncpg>=0.30,<1",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "mcp>=2,<3",
+  "orjson>=3.10,<4",
+  "prometheus-client>=0.22,<1",
+  "pydantic>=2.11,<3",
+  "pydantic-settings>=2.10,<3",
+  "PyYAML>=6.0,<7",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.17,<2",
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.1,<2",
+  "pytest-cov>=6.2,<7",
+  "pytest-html>=4.1,<5",
+  "ruff>=0.12,<1",
+]
+
+[project.urls]
+Homepage = "https://github.com/vtavakkoli/AutoUpdate"
+Repository = "https://github.com/vtavakkoli/AutoUpdate"
+Issues = "https://github.com/vtavakkoli/AutoUpdate/issues"
+
+[project.scripts]
+pogeo = "pogeo.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pogeo"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --cov=pogeo --cov-report=term-missing"
+testpaths = ["tests"]
+markers = [
+  "integration: tests requiring a running PoGeo stack",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "RUF"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+"src/pogeo/api.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["pogeo"]
+warn_unused_ignores = true

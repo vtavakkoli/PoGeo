@@ -200,9 +200,7 @@ class WFSClient:
             payload.get("features"), list
         ):
             detail = _response_error_detail(response)
-            message = (
-                f"WFS source for {collection.id!r} did not return a GeoJSON FeatureCollection"
-            )
+            message = f"WFS source for {collection.id!r} did not return a GeoJSON FeatureCollection"
             if detail:
                 message += f": {detail}"
             raise WFSUpstreamError(message)

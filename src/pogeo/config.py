@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3:4b"
     ollama_timeout_seconds: float = Field(default=180.0, gt=0)
+    wfs_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     max_features: int = Field(default=1000, ge=1, le=100_000)
     max_tool_iterations: int = Field(default=5, ge=1, le=12)
     tile_cache_max_items: int = Field(default=2048, ge=1, le=100_000)

@@ -79,6 +79,15 @@ def _versioned_wfs_params(
     }
 
 
+def _bbox_param(collection: CollectionDefinition, bbox: list[float]) -> str:
+    values = [str(value) for value in bbox]
+    # WFS 1.1+ BBOX KVP accepts an explicit CRS. Supplying it avoids
+    # ambiguous axis handling in services such as Vienna's GeoServer.
+    if not collection.wfs_version.startswith("1.0"):
+        values.append(collection.wfs_srs_name)
+    return ",".join(values)
+
+
 def _clean_error_text(value: str, *, limit: int = 500) -> str:
     cleaned = re.sub(r"\s+", " ", value).strip()
     return cleaned[:limit]
@@ -169,7 +178,7 @@ class WFSClient:
         if request.offset:
             params["startIndex"] = request.offset
         if request.bbox is not None:
-            params["bbox"] = ",".join(str(value) for value in request.bbox)
+            params["bbox"] = _bbox_param(collection, request.bbox)
         if request.filters:
             params["CQL_FILTER"] = " AND ".join(
                 f"{name}={_cql_literal(value)}" for name, value in sorted(request.filters.items())
@@ -189,7 +198,7 @@ class WFSClient:
 
         try:
             payload = response.json()
-        except (json.JSONDecodeError, ValueError) as exc:
+        except ValueError as exc:
             detail = _response_error_detail(response)
             message = f"WFS source for {collection.id!r} returned non-JSON content"
             if detail:

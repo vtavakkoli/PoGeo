@@ -70,7 +70,7 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
 async def ogc_landing() -> dict[str, Any]:
     return {
         "title": "PoGeo OGC-style API",
-        "description": "PostGIS features and vector tiles exposed through PoGeo.",
+        "description": "Allowlisted PostGIS and remote WFS features exposed through PoGeo.",
         "links": [
             {"href": "/api/ogc", "rel": "self", "type": "application/json"},
             {"href": "/conformance", "rel": "conformance", "type": "application/json"},
@@ -111,19 +111,24 @@ async def collection(collection_id: str) -> dict[str, Any]:
         item = get_runtime().geo.describe_collection(collection_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    item["links"] = [
+
+    links: list[dict[str, str]] = [
         {"href": f"/collections/{collection_id}", "rel": "self"},
         {
             "href": f"/collections/{collection_id}/items",
             "rel": "items",
             "type": "application/geo+json",
         },
-        {
-            "href": f"/collections/{collection_id}/tiles/{{z}}/{{x}}/{{y}}.pbf",
-            "rel": "tiles",
-            "type": "application/vnd.mapbox-vector-tile",
-        },
     ]
+    if item.get("provider") == "postgis":
+        links.append(
+            {
+                "href": f"/collections/{collection_id}/tiles/{{z}}/{{x}}/{{y}}.pbf",
+                "rel": "tiles",
+                "type": "application/vnd.mapbox-vector-tile",
+            }
+        )
+    item["links"] = links
     return item
 
 
@@ -168,6 +173,8 @@ async def collection_item(collection_id: str, feature_id: int) -> dict[str, Any]
         feature = await get_runtime().geo.get_feature(collection_id, feature_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=405, detail=str(exc)) from exc
     if feature is None:
         raise HTTPException(status_code=404, detail="Feature not found")
     return feature
@@ -215,6 +222,8 @@ async def vector_tile(
         tile, cache_hit = await get_runtime().geo.vector_tile(collection_id, z, x, y)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=405, detail=str(exc)) from exc
 
     etag = f'"{hashlib.blake2s(tile, digest_size=8).hexdigest()}"'
     headers = {

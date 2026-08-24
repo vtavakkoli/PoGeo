@@ -16,6 +16,8 @@ def _collection() -> CollectionDefinition:
             "provider": "wfs",
             "wfs_url": "https://data.wien.gv.at/daten/geo",
             "wfs_type_name": "ogdwien:SPIELPLATZOGD",
+            "wfs_version": "2.0.0",
+            "wfs_output_format": "application/json",
             "properties": ["NAME", "BEZIRK"],
             "max_limit": 5000,
         }
@@ -27,7 +29,9 @@ async def test_wfs_query_builds_bounded_geojson_request() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.params["service"] == "WFS"
         assert request.url.params["request"] == "GetFeature"
-        assert request.url.params["typeName"] == "ogdwien:SPIELPLATZOGD"
+        assert request.url.params["version"] == "2.0.0"
+        assert request.url.params["typeNames"] == "ogdwien:SPIELPLATZOGD"
+        assert request.url.params["count"] == "20"
         assert request.url.params["bbox"] == "16.3,48.2,16.4,48.3"
         assert request.url.params["CQL_FILTER"] == "BEZIRK=21"
         return httpx.Response(
@@ -64,6 +68,13 @@ async def test_wfs_query_builds_bounded_geojson_request() -> None:
         "NAME": "Test playground",
         "BEZIRK": 21,
     }
+
+
+def test_wfs_1_1_catalog_remains_supported() -> None:
+    collection = _collection().model_copy(
+        update={"wfs_version": "1.1.0", "wfs_output_format": "json"}
+    )
+    assert collection.wfs_version == "1.1.0"
 
 
 @pytest.mark.asyncio

@@ -85,7 +85,10 @@ class WFSClient:
             timeout=timeout_seconds,
             follow_redirects=False,
             transport=transport,
-            headers={"User-Agent": "PoGeo/0.2 WFS provider", "Accept": "application/geo+json, application/json"},
+            headers={
+                "User-Agent": "PoGeo/0.2 WFS provider",
+                "Accept": "application/geo+json, application/json",
+            },
         )
 
     async def close(self) -> None:

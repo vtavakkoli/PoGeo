@@ -24,6 +24,26 @@ def _collection() -> CollectionDefinition:
     )
 
 
+def _nearest_features() -> dict[str, object]:
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": "far",
+                "geometry": {"type": "Point", "coordinates": [16.40, 48.25]},
+                "properties": {"NAME": "Far", "BEZIRK": 21},
+            },
+            {
+                "type": "Feature",
+                "id": "near",
+                "geometry": {"type": "Point", "coordinates": [16.361, 48.251]},
+                "properties": {"NAME": "Near", "BEZIRK": 21},
+            },
+        ],
+    }
+
+
 @pytest.mark.asyncio
 async def test_wfs_query_builds_bounded_geojson_request() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
@@ -43,7 +63,11 @@ async def test_wfs_query_builds_bounded_geojson_request() -> None:
                         "type": "Feature",
                         "id": "playgrounds.1",
                         "geometry": {"type": "Point", "coordinates": [16.36, 48.25]},
-                        "properties": {"NAME": "Test playground", "BEZIRK": 21, "SECRET": "drop"},
+                        "properties": {
+                            "NAME": "Test playground",
+                            "BEZIRK": 21,
+                            "SECRET": "drop",
+                        },
                     }
                 ],
             },
@@ -78,28 +102,12 @@ def test_wfs_1_1_catalog_remains_supported() -> None:
 
 
 @pytest.mark.asyncio
-async def test_wfs_nearest_ranks_features_by_distance() -> None:
-    def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200,
-            json={
-                "type": "FeatureCollection",
-                "features": [
-                    {
-                        "type": "Feature",
-                        "id": "far",
-                        "geometry": {"type": "Point", "coordinates": [16.40, 48.25]},
-                        "properties": {"NAME": "Far", "BEZIRK": 21},
-                    },
-                    {
-                        "type": "Feature",
-                        "id": "near",
-                        "geometry": {"type": "Point", "coordinates": [16.361, 48.251]},
-                        "properties": {"NAME": "Near", "BEZIRK": 21},
-                    },
-                ],
-            },
-        )
+async def test_wfs_nearest_expands_search_until_enough_features() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=_nearest_features())
 
     client = WFSClient(max_features=1000, transport=httpx.MockTransport(handler))
     try:
@@ -115,8 +123,36 @@ async def test_wfs_nearest_ranks_features_by_distance() -> None:
     finally:
         await client.close()
 
+    assert len(requests) == 3
     assert [feature["id"] for feature in result["features"]] == ["near", "far"]
     assert result["features"][0]["properties"]["distance_meters"] > 0
+
+
+@pytest.mark.asyncio
+async def test_wfs_nearest_respects_explicit_radius() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=_nearest_features())
+
+    client = WFSClient(max_features=1000, transport=httpx.MockTransport(handler))
+    try:
+        result = await client.find_nearest(
+            _collection(),
+            NearestQuery(
+                collection_id="playgrounds",
+                longitude=16.36,
+                latitude=48.25,
+                radius_meters=500,
+                limit=5,
+            ),
+        )
+    finally:
+        await client.close()
+
+    assert len(requests) == 2
+    assert [feature["id"] for feature in result["features"]] == ["near"]
 
 
 @pytest.mark.asyncio

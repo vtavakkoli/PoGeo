@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import json
 import math
+import re
+from html import unescape
 from typing import Any
 
 import httpx
 
 from pogeo.catalog import CollectionDefinition
 from pogeo.models import FeatureQuery, NearestQuery
+
+
+class WFSUpstreamError(RuntimeError):
+    """A configured WFS source returned an unusable response."""
 
 
 def _cql_literal(value: str | int | float | bool) -> str:
@@ -72,6 +79,66 @@ def _versioned_wfs_params(
     }
 
 
+def _bbox_param(collection: CollectionDefinition, bbox: list[float]) -> str:
+    values = [str(value) for value in bbox]
+    # WFS 1.1+ BBOX KVP accepts an explicit CRS. Supplying it avoids
+    # ambiguous spatial filtering in services such as Vienna's GeoServer.
+    if not collection.wfs_version.startswith("1.0"):
+        values.append(collection.wfs_srs_name)
+    return ",".join(values)
+
+
+def _clean_error_text(value: str, *, limit: int = 500) -> str:
+    cleaned = re.sub(r"\s+", " ", value).strip()
+    return cleaned[:limit]
+
+
+def _xml_exception_text(text: str) -> str | None:
+    # Do not parse untrusted upstream XML. OGC exception documents have two
+    # small text-bearing tags we care about, so bounded extraction is enough.
+    pattern = re.compile(
+        r"<(?:[A-Za-z_][\w.-]*:)?(?:ExceptionText|ServiceException)\b[^>]*>"
+        r"(.*?)"
+        r"</(?:[A-Za-z_][\w.-]*:)?(?:ExceptionText|ServiceException)>",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    messages: list[str] = []
+    for match in pattern.finditer(text):
+        without_tags = re.sub(r"<[^>]+>", " ", match.group(1))
+        value = _clean_error_text(unescape(without_tags))
+        if value:
+            messages.append(value)
+    if not messages:
+        return None
+    return _clean_error_text("; ".join(messages))
+
+
+def _response_error_detail(response: httpx.Response) -> str | None:
+    text = response.text[:8_000]
+    if not text.strip():
+        return None
+
+    content_type = response.headers.get("content-type", "").lower()
+    if "json" in content_type or text.lstrip().startswith(("{", "[")):
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        else:
+            if isinstance(payload, dict):
+                for key in ("detail", "error", "message"):
+                    value = payload.get(key)
+                    if isinstance(value, str) and value.strip():
+                        return _clean_error_text(value)
+
+    if "xml" in content_type or text.lstrip().startswith("<"):
+        xml_message = _xml_exception_text(text)
+        if xml_message:
+            return xml_message
+
+    return _clean_error_text(text)
+
+
 class WFSClient:
     def __init__(
         self,
@@ -112,19 +179,41 @@ class WFSClient:
         if request.offset:
             params["startIndex"] = request.offset
         if request.bbox is not None:
-            params["bbox"] = ",".join(str(value) for value in request.bbox)
+            params["bbox"] = _bbox_param(collection, request.bbox)
         if request.filters:
             params["CQL_FILTER"] = " AND ".join(
                 f"{name}={_cql_literal(value)}" for name, value in sorted(request.filters.items())
             )
 
-        response = await self._client.get(collection.wfs_url, params=params)
-        response.raise_for_status()
-        payload = response.json()
+        try:
+            response = await self._client.get(collection.wfs_url, params=params)
+        except httpx.RequestError as exc:
+            raise WFSUpstreamError(f"WFS source for {collection.id!r} is unreachable") from exc
+
+        if response.is_error:
+            detail = _response_error_detail(response)
+            message = f"WFS source for {collection.id!r} returned HTTP {response.status_code}"
+            if detail:
+                message += f": {detail}"
+            raise WFSUpstreamError(message)
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            detail = _response_error_detail(response)
+            message = f"WFS source for {collection.id!r} returned non-JSON content"
+            if detail:
+                message += f": {detail}"
+            raise WFSUpstreamError(message) from exc
+
         if payload.get("type") != "FeatureCollection" or not isinstance(
             payload.get("features"), list
         ):
-            raise ValueError("WFS endpoint did not return a GeoJSON FeatureCollection")
+            detail = _response_error_detail(response)
+            message = f"WFS source for {collection.id!r} did not return a GeoJSON FeatureCollection"
+            if detail:
+                message += f": {detail}"
+            raise WFSUpstreamError(message)
 
         features = [
             self._normalize_feature(item, collection) for item in payload["features"][:limit]

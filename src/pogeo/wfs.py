@@ -72,6 +72,11 @@ def _versioned_wfs_params(
     }
 
 
+def _progressive_radii(max_radius: float) -> list[float]:
+    radii = [250.0, 1_000.0, 5_000.0, 20_000.0, max_radius]
+    return sorted({min(radius, max_radius) for radius in radii if radius > 0})
+
+
 class WFSClient:
     def __init__(
         self,
@@ -140,17 +145,7 @@ class WFSClient:
         collection: CollectionDefinition,
         request: NearestQuery,
     ) -> dict[str, Any]:
-        search_radius = request.radius_meters or collection.wfs_nearest_radius_meters
-        latitude_delta = search_radius / 110_540
-        longitude_scale = max(math.cos(math.radians(request.latitude)), 0.05)
-        longitude_delta = search_radius / (111_320 * longitude_scale)
-        bbox = [
-            request.longitude - longitude_delta,
-            request.latitude - latitude_delta,
-            request.longitude + longitude_delta,
-            request.latitude + latitude_delta,
-        ]
-
+        max_radius = request.radius_meters or collection.wfs_nearest_radius_meters
         filters: dict[str, str | int | float | bool] = {}
         if request.category is not None:
             if "category" not in collection.properties:
@@ -164,34 +159,49 @@ class WFSClient:
             self.max_features,
             max(request.limit * 50, 500),
         )
-        candidates = await self.query_features(
-            collection,
-            FeatureQuery(
-                collection_id=collection.id,
-                bbox=bbox,
-                filters=filters,
-                limit=candidate_limit,
-            ),
-        )
-
         ranked: list[tuple[float, dict[str, Any]]] = []
-        for feature in candidates["features"]:
-            point = _representative_point(feature.get("geometry"))
-            if point is None:
-                continue
-            distance = _haversine_meters(
-                request.longitude,
-                request.latitude,
-                point[0],
-                point[1],
-            )
-            if request.radius_meters is not None and distance > request.radius_meters:
-                continue
-            properties = dict(feature.get("properties") or {})
-            properties["distance_meters"] = round(distance, 2)
-            ranked.append((distance, {**feature, "properties": properties}))
 
-        ranked.sort(key=lambda item: item[0])
+        for search_radius in _progressive_radii(max_radius):
+            latitude_delta = search_radius / 110_540
+            longitude_scale = max(math.cos(math.radians(request.latitude)), 0.05)
+            longitude_delta = search_radius / (111_320 * longitude_scale)
+            bbox = [
+                request.longitude - longitude_delta,
+                request.latitude - latitude_delta,
+                request.longitude + longitude_delta,
+                request.latitude + latitude_delta,
+            ]
+            candidates = await self.query_features(
+                collection,
+                FeatureQuery(
+                    collection_id=collection.id,
+                    bbox=bbox,
+                    filters=filters,
+                    limit=candidate_limit,
+                ),
+            )
+
+            ranked = []
+            for feature in candidates["features"]:
+                point = _representative_point(feature.get("geometry"))
+                if point is None:
+                    continue
+                distance = _haversine_meters(
+                    request.longitude,
+                    request.latitude,
+                    point[0],
+                    point[1],
+                )
+                if distance > search_radius:
+                    continue
+                properties = dict(feature.get("properties") or {})
+                properties["distance_meters"] = round(distance, 2)
+                ranked.append((distance, {**feature, "properties": properties}))
+
+            ranked.sort(key=lambda item: item[0])
+            if len(ranked) >= request.limit or search_radius >= max_radius:
+                break
+
         features = [feature for _, feature in ranked[: request.limit]]
         return {
             "type": "FeatureCollection",

@@ -146,7 +146,8 @@ async def metrics_middleware(request: Request, call_next):  # type: ignore[no-un
         "default-src 'self'; "
         "script-src 'self' https://unpkg.com; "
         "style-src 'self' 'unsafe-inline' https://unpkg.com; "
-        "img-src 'self' data: https://*.tile.openstreetmap.org https://maps.wien.gv.at; "
+        "img-src 'self' data: https://unpkg.com https://*.tile.openstreetmap.org "
+        "https://maps.wien.gv.at https://mapsneu.wien.gv.at; "
         "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"
     )
     return response

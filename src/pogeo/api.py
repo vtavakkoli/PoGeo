@@ -9,6 +9,7 @@ from fastapi.responses import ORJSONResponse
 from pogeo.models import ChatRequest, ChatResponse, FeatureQuery, NearestQuery
 from pogeo.ollama import OllamaAgent, OllamaUnavailableError
 from pogeo.runtime import get_runtime
+from pogeo.wfs import WFSUpstreamError
 
 router = APIRouter(default_response_class=ORJSONResponse)
 
@@ -62,6 +63,8 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         return await agent.chat(payload)
     except OllamaUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except WFSUpstreamError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -155,6 +158,8 @@ async def collection_items(
     )
     try:
         result = await get_runtime().geo.query_features(request)
+    except WFSUpstreamError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     result["links"] = [
@@ -199,6 +204,8 @@ async def nearest(
     )
     try:
         return await get_runtime().geo.find_nearest(request)
+    except WFSUpstreamError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

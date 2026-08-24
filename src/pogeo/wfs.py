@@ -52,10 +52,7 @@ def _haversine_meters(lon1: float, lat1: float, lon2: float, lat2: float) -> flo
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
     dlambda = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dphi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    )
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     return 2 * radius * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
@@ -113,10 +110,14 @@ class WFSClient:
         response = await self._client.get(collection.wfs_url, params=params)
         response.raise_for_status()
         payload = response.json()
-        if payload.get("type") != "FeatureCollection" or not isinstance(payload.get("features"), list):
+        if payload.get("type") != "FeatureCollection" or not isinstance(
+            payload.get("features"), list
+        ):
             raise ValueError("WFS endpoint did not return a GeoJSON FeatureCollection")
 
-        features = [self._normalize_feature(item, collection) for item in payload["features"][:limit]]
+        features = [
+            self._normalize_feature(item, collection) for item in payload["features"][:limit]
+        ]
         return {
             "type": "FeatureCollection",
             "numberReturned": len(features),
@@ -142,7 +143,9 @@ class WFSClient:
         filters: dict[str, str | int | float | bool] = {}
         if request.category is not None:
             if "category" not in collection.properties:
-                raise ValueError(f"Collection {collection.id!r} does not expose a category property")
+                raise ValueError(
+                    f"Collection {collection.id!r} does not expose a category property"
+                )
             filters["category"] = request.category
 
         candidate_limit = min(

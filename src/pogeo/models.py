@@ -50,6 +50,19 @@ class MapContext(BaseModel):
     bbox: list[float] | None = None
     zoom: float | None = None
     visible_collections: list[str] = Field(default_factory=list)
+    selected_point: list[float] | None = None
+
+    @field_validator("selected_point")
+    @classmethod
+    def validate_selected_point(cls, value: list[float] | None) -> list[float] | None:
+        if value is None:
+            return None
+        if len(value) != 2:
+            raise ValueError("selected_point must contain longitude,latitude")
+        longitude, latitude = value
+        if not -180 <= longitude <= 180 or not -90 <= latitude <= 90:
+            raise ValueError("selected_point must contain valid WGS84 coordinates")
+        return value
 
 
 class ChatRequest(BaseModel):

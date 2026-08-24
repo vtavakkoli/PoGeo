@@ -5,7 +5,7 @@ import pytest
 
 from pogeo.catalog import CollectionDefinition
 from pogeo.models import FeatureQuery, NearestQuery
-from pogeo.wfs import WFSClient
+from pogeo.wfs import WFSClient, WFSUpstreamError
 
 
 def _collection() -> CollectionDefinition:
@@ -129,6 +129,66 @@ async def test_wfs_rejects_non_allowlisted_filters() -> None:
             await client.query_features(
                 _collection(),
                 FeatureQuery(collection_id="playgrounds", filters={"SECRET": "x"}),
+            )
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_wfs_http_error_extracts_ogc_exception_text() -> None:
+    xml = """<?xml version="1.0"?>
+    <ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows">
+      <ows:Exception exceptionCode="InvalidParameterValue">
+        <ows:ExceptionText>Feature type ogdwien:OLD unknown</ows:ExceptionText>
+      </ows:Exception>
+    </ows:ExceptionReport>
+    """
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            text=xml,
+            headers={"content-type": "application/xml;charset=utf-8"},
+        )
+
+    client = WFSClient(max_features=1000, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(
+            WFSUpstreamError,
+            match=r"HTTP 400: Feature type ogdwien:OLD unknown",
+        ):
+            await client.query_features(
+                _collection(),
+                FeatureQuery(collection_id="playgrounds", limit=5),
+            )
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_wfs_successful_xml_exception_is_not_reported_as_json_error() -> None:
+    xml = """<?xml version="1.0"?>
+    <ServiceExceptionReport>
+      <ServiceException>Feature type ogdwien:OLD unknown</ServiceException>
+    </ServiceExceptionReport>
+    """
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            text=xml,
+            headers={"content-type": "application/xml;charset=utf-8"},
+        )
+
+    client = WFSClient(max_features=1000, transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(
+            WFSUpstreamError,
+            match=r"non-JSON content: Feature type ogdwien:OLD unknown",
+        ):
+            await client.query_features(
+                _collection(),
+                FeatureQuery(collection_id="playgrounds", limit=5),
             )
     finally:
         await client.close()

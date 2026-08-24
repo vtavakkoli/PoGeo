@@ -110,7 +110,9 @@ async def test_wfs_nearest_ranks_features_by_distance() -> None:
 
 @pytest.mark.asyncio
 async def test_wfs_rejects_non_allowlisted_filters() -> None:
-    client = WFSClient(max_features=1000, transport=httpx.MockTransport(lambda _: httpx.Response(500)))
+    client = WFSClient(
+        max_features=1000, transport=httpx.MockTransport(lambda _: httpx.Response(500))
+    )
     try:
         with pytest.raises(ValueError, match="not allowlisted"):
             await client.query_features(

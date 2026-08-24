@@ -56,6 +56,22 @@ def _haversine_meters(lon1: float, lat1: float, lon2: float, lat2: float) -> flo
     return 2 * radius * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def _versioned_wfs_params(
+    collection: CollectionDefinition,
+    limit: int,
+) -> dict[str, str | int]:
+    is_wfs_2 = collection.wfs_version.startswith("2.")
+    return {
+        "service": "WFS",
+        "request": "GetFeature",
+        "version": collection.wfs_version,
+        "typeNames" if is_wfs_2 else "typeName": collection.wfs_type_name or "",
+        "srsName": collection.wfs_srs_name,
+        "outputFormat": collection.wfs_output_format,
+        "count" if is_wfs_2 else "maxFeatures": limit,
+    }
+
+
 class WFSClient:
     def __init__(
         self,
@@ -69,7 +85,7 @@ class WFSClient:
             timeout=timeout_seconds,
             follow_redirects=False,
             transport=transport,
-            headers={"User-Agent": "PoGeo/0.2 WFS provider"},
+            headers={"User-Agent": "PoGeo/0.2 WFS provider", "Accept": "application/geo+json, application/json"},
         )
 
     async def close(self) -> None:
@@ -89,15 +105,7 @@ class WFSClient:
             raise ValueError(f"Filters are not allowlisted for {collection.id!r}: {names}")
 
         limit = min(request.limit, collection.max_limit, self.max_features)
-        params: dict[str, str | int] = {
-            "service": "WFS",
-            "request": "GetFeature",
-            "version": collection.wfs_version,
-            "typeName": collection.wfs_type_name or "",
-            "srsName": collection.wfs_srs_name,
-            "outputFormat": collection.wfs_output_format,
-            "maxFeatures": limit,
-        }
+        params = _versioned_wfs_params(collection, limit)
         if request.offset:
             params["startIndex"] = request.offset
         if request.bbox is not None:

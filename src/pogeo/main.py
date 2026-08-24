@@ -78,6 +78,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.max_features,
         tile_cache_max_items=settings.tile_cache_max_items,
         tile_cache_ttl_seconds=settings.tile_cache_ttl_seconds,
+        wfs_timeout_seconds=settings.wfs_timeout_seconds,
     )
     runtime = Runtime(settings=settings, catalog=catalog, database=database, geo=geo)
     set_runtime(runtime)
@@ -89,6 +90,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             yield
         finally:
             await app.state.ollama.close()
+            await geo.close()
             await database.close()
             set_runtime(None)
 
@@ -96,9 +98,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 settings = get_settings()
 app = FastAPI(
     title="PoGeo",
-    summary="AI-native, MCP-ready PostGIS server",
+    summary="AI-native, MCP-ready geospatial server",
     description=(
-        "PoGeo publishes allowlisted PostGIS data through REST/OGC-style APIs, vector tiles, "
+        "PoGeo publishes allowlisted PostGIS and remote WFS data through REST/OGC-style APIs, "
         "MCP tools, and a safe Ollama geospatial assistant."
     ),
     version=__version__,
@@ -144,7 +146,8 @@ async def metrics_middleware(request: Request, call_next):  # type: ignore[no-un
         "default-src 'self'; "
         "script-src 'self' https://unpkg.com; "
         "style-src 'self' 'unsafe-inline' https://unpkg.com; "
-        "img-src 'self' data: https://*.tile.openstreetmap.org; "
+        "img-src 'self' data: https://unpkg.com https://*.tile.openstreetmap.org "
+        "https://maps.wien.gv.at https://mapsneu.wien.gv.at; "
         "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"
     )
     return response

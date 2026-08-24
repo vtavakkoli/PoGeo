@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pogeo"
-version = "0.1.1"
-description = "AI-native, MCP-ready geospatial API server for PostGIS"
+version = "0.2.0"
+description = "AI-native, MCP-ready geospatial API server for PostGIS and remote WFS"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [
   { name = "Vahid Tavakkoli" }
 ]
-keywords = ["postgis", "fastapi", "mcp", "ollama", "geospatial", "ogc"]
+keywords = ["postgis", "wfs", "fastapi", "mcp", "ollama", "geospatial", "ogc"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Framework :: FastAPI",

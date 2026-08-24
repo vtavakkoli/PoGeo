@@ -8,6 +8,7 @@ from pogeo.catalog import Catalog, CollectionDefinition
 from pogeo.database import Database
 from pogeo.models import FeatureQuery, NearestQuery
 from pogeo.sql import SQLBuilder
+from pogeo.wfs import WFSClient
 
 
 def _decode_geometry(value: Any) -> dict[str, Any] | None:
@@ -44,10 +45,12 @@ class GeoService:
         *,
         tile_cache_max_items: int = 2048,
         tile_cache_ttl_seconds: float = 300.0,
+        wfs_timeout_seconds: float = 30.0,
     ) -> None:
         self.database = database
         self.catalog = catalog
         self.max_features = max_features
+        self.wfs = WFSClient(max_features=max_features, timeout_seconds=wfs_timeout_seconds)
         self._tile_cache: TTLCache[tuple[str, int, int, int], bytes] = TTLCache(
             max_items=tile_cache_max_items,
             ttl_seconds=tile_cache_ttl_seconds,
@@ -57,6 +60,7 @@ class GeoService:
                 "id": item.id,
                 "title": item.title,
                 "description": item.description,
+                "provider": item.provider,
                 "itemType": "feature",
                 "crs": [f"http://www.opengis.net/def/crs/EPSG/0/{item.srid}"],
                 "geometryType": item.geometry_type,
@@ -69,6 +73,7 @@ class GeoService:
                 "id": item.id,
                 "title": item.title,
                 "description": item.description,
+                "provider": item.provider,
                 "schema": item.schema_name,
                 "table": item.table,
                 "idColumn": item.id_column,
@@ -78,9 +83,14 @@ class GeoService:
                 "srid": item.srid,
                 "properties": list(item.properties),
                 "maxLimit": item.max_limit,
+                "wfsTypeName": item.wfs_type_name,
+                "wfsSrsName": item.wfs_srs_name if item.provider == "wfs" else None,
             }
             for item in self.catalog.list()
         }
+
+    async def close(self) -> None:
+        await self.wfs.close()
 
     def list_collections(self) -> list[dict[str, Any]]:
         return [dict(item) for item in self._collection_documents]
@@ -92,6 +102,9 @@ class GeoService:
     async def query_features(self, request: FeatureQuery) -> dict[str, Any]:
         collection = self.catalog.get(request.collection_id)
         bounded = request.model_copy(update={"limit": min(request.limit, self.max_features)})
+        if collection.provider == "wfs":
+            return await self.wfs.query_features(collection, bounded)
+
         prepared = SQLBuilder.feature_query(collection, bounded)
         rows = await self.database.fetch(prepared.sql, *prepared.parameters)
         features = [_row_to_feature(row, collection) for row in rows]
@@ -103,6 +116,8 @@ class GeoService:
 
     async def get_feature(self, collection_id: str, feature_id: int) -> dict[str, Any] | None:
         collection = self.catalog.get(collection_id)
+        if collection.provider == "wfs":
+            raise ValueError("Direct item lookup is not supported for remote WFS collections")
         prepared = SQLBuilder.item_query(collection, feature_id)
         row = await self.database.fetchrow(prepared.sql, *prepared.parameters)
         if row is None:
@@ -111,6 +126,9 @@ class GeoService:
 
     async def find_nearest(self, request: NearestQuery) -> dict[str, Any]:
         collection = self.catalog.get(request.collection_id)
+        if collection.provider == "wfs":
+            return await self.wfs.find_nearest(collection, request)
+
         prepared = SQLBuilder.nearest_query(collection, request)
         rows = await self.database.fetch(prepared.sql, *prepared.parameters)
         features = [_row_to_feature(row, collection, include_distance=True) for row in rows]
@@ -122,6 +140,8 @@ class GeoService:
 
     async def vector_tile(self, collection_id: str, z: int, x: int, y: int) -> tuple[bytes, bool]:
         collection = self.catalog.get(collection_id)
+        if collection.provider != "postgis":
+            raise ValueError("Vector tiles are currently available only for PostGIS collections")
         cache_key = (collection_id, z, x, y)
         cached = self._tile_cache.get(cache_key)
         if cached is not None:
@@ -144,5 +164,9 @@ class GeoService:
                 "size": stats.size,
                 "maxItems": stats.max_items,
                 "ttlSeconds": stats.ttl_seconds,
-            }
+            },
+            "providers": {
+                "postgis": sum(item.provider == "postgis" for item in self.catalog.list()),
+                "wfs": sum(item.provider == "wfs" for item in self.catalog.list()),
+            },
         }

@@ -178,9 +178,7 @@ class WFSClient:
         try:
             response = await self._client.get(collection.wfs_url, params=params)
         except httpx.RequestError as exc:
-            raise WFSUpstreamError(
-                f"WFS source for {collection.id!r} is unreachable"
-            ) from exc
+            raise WFSUpstreamError(f"WFS source for {collection.id!r} is unreachable") from exc
 
         if response.is_error:
             detail = _response_error_detail(response)
@@ -202,7 +200,9 @@ class WFSClient:
             payload.get("features"), list
         ):
             detail = _response_error_detail(response)
-            message = f"WFS source for {collection.id!r} did not return a GeoJSON FeatureCollection"
+            message = (
+                f"WFS source for {collection.id!r} did not return a GeoJSON FeatureCollection"
+            )
             if detail:
                 message += f": {detail}"
             raise WFSUpstreamError(message)

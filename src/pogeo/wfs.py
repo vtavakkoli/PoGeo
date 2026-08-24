@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
-import xml.etree.ElementTree as ET
+from html import unescape
 from typing import Any
 
 import httpx
@@ -82,7 +82,7 @@ def _versioned_wfs_params(
 def _bbox_param(collection: CollectionDefinition, bbox: list[float]) -> str:
     values = [str(value) for value in bbox]
     # WFS 1.1+ BBOX KVP accepts an explicit CRS. Supplying it avoids
-    # ambiguous axis handling in services such as Vienna's GeoServer.
+    # ambiguous spatial filtering in services such as Vienna's GeoServer.
     if not collection.wfs_version.startswith("1.0"):
         values.append(collection.wfs_srs_name)
     return ",".join(values)
@@ -94,17 +94,18 @@ def _clean_error_text(value: str, *, limit: int = 500) -> str:
 
 
 def _xml_exception_text(text: str) -> str | None:
-    try:
-        root = ET.fromstring(text)
-    except ET.ParseError:
-        return None
-
+    # Do not parse untrusted upstream XML. OGC exception documents have two
+    # small text-bearing tags we care about, so bounded extraction is enough.
+    pattern = re.compile(
+        r"<(?:[A-Za-z_][\w.-]*:)?(?:ExceptionText|ServiceException)\b[^>]*>"
+        r"(.*?)"
+        r"</(?:[A-Za-z_][\w.-]*:)?(?:ExceptionText|ServiceException)>",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
     messages: list[str] = []
-    for element in root.iter():
-        local_name = element.tag.rsplit("}", 1)[-1]
-        if local_name not in {"ExceptionText", "ServiceException"}:
-            continue
-        value = _clean_error_text("".join(element.itertext()))
+    for match in pattern.finditer(text):
+        without_tags = re.sub(r"<[^>]+>", " ", match.group(1))
+        value = _clean_error_text(unescape(without_tags))
         if value:
             messages.append(value)
     if not messages:
